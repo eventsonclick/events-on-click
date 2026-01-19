@@ -1,0 +1,329 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// --- ACCESS CONTROL ---
+model MasterRole {
+  id          Int     @id @default(autoincrement())
+  roleName    String  @unique @map("role_name")
+  description String?
+  users       User[]
+
+  @@map("master_roles")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  roleId       Int      @map("role_id")
+  role         MasterRole @relation(fields: [roleId], references: [id])
+  fullName     String   @map("full_name")
+  email        String   @unique
+  mobileNumber String?  @unique @map("mobile_number")
+  passwordHash String?  @map("password_hash")
+  cityId       Int?     @map("city_id")
+  city         MasterCity? @relation(fields: [cityId], references: [id])
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  vendorProfile   VendorProfile?
+  employeeDetails EmployeeDetail?
+  inquiries       Inquiry[]
+  reviews         VendorReview[] @relation("UserReviews")
+  moderatedReviews VendorReview[] @relation("ModeratedReviews")
+  actions         SystemLog[]
+  verifiedVendors VendorProfile[] @relation("VerifiedBy")
+
+  @@map("users")
+}
+
+model EmployeeDetail {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @unique @map("user_id")
+  user         User     @relation(fields: [userId], references: [id])
+  employeeCode String   @unique @map("employee_code")
+  department   String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("employee_details")
+}
+
+// --- GEOGRAPHY ---
+model MasterCountry {
+  id     Int           @id @default(autoincrement())
+  name   String
+  slug   String        @unique
+  states MasterState[]
+
+  @@map("master_countries")
+}
+
+model MasterState {
+  id        Int           @id @default(autoincrement())
+  countryId Int           @map("country_id")
+  country   MasterCountry @relation(fields: [countryId], references: [id])
+  name      String
+  slug      String        @unique
+  cities    MasterCity[]
+
+  @@map("master_states")
+}
+
+model MasterCity {
+  id       Int            @id @default(autoincrement())
+  stateId  Int            @map("state_id")
+  state    MasterState    @relation(fields: [stateId], references: [id])
+  name     String
+  slug     String         @unique
+  regions  MasterRegion[]
+  vendors  VendorProfile[]
+  users    User[]
+
+  @@map("master_cities")
+}
+
+model MasterRegion {
+  id     Int          @id @default(autoincrement())
+  cityId Int          @map("city_id")
+  city   MasterCity   @relation(fields: [cityId], references: [id])
+  name   String
+  slug   String       @unique
+  areas  MasterArea[]
+
+  @@map("master_regions")
+}
+
+model MasterArea {
+  id       Int          @id @default(autoincrement())
+  regionId Int          @map("region_id")
+  region   MasterRegion @relation(fields: [regionId], references: [id])
+  name     String
+  slug     String       @unique
+  pincode  String?      @db.VarChar(10)
+  vendors  VendorProfile[]
+
+  @@map("master_areas")
+}
+
+// --- BUSINESS MASTERS ---
+model MasterCategory {
+  id            Int                 @id @default(autoincrement())
+  name          String
+  slug          String              @unique
+  subCategories MasterSubCategory[]
+  vendors       VendorProfile[]
+
+  @@map("master_categories")
+}
+
+model MasterSubCategory {
+  id         Int            @id @default(autoincrement())
+  categoryId Int            @map("category_id")
+  category   MasterCategory @relation(fields: [categoryId], references: [id])
+  name       String
+  slug       String         @unique
+  vendors    VendorProfile[]
+
+  @@map("master_sub_categories")
+}
+
+model MasterAmenity {
+  id      Int                       @id @default(autoincrement())
+  name    String
+  vendors VendorAmenityMapping[]
+
+  @@map("master_amenities")
+}
+
+model MasterOccasion {
+  id        Int                       @id @default(autoincrement())
+  name      String
+  groupName String?                   @map("group_name")
+  slug      String                    @unique
+  vendors   VendorOccasionMapping[]
+  inquiries Inquiry[]
+
+  @@map("master_occasions")
+}
+
+// --- VENDOR CORE ---
+model VendorProfile {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique @map("user_id")
+  user           User     @relation(fields: [userId], references: [id])
+  businessName   String?  @map("business_name")
+  slug           String?  @unique
+  categoryId     Int?     @map("category_id")
+  category       MasterCategory? @relation(fields: [categoryId], references: [id])
+  subCategoryId  Int?     @map("sub_category_id")
+  subCategory    MasterSubCategory? @relation(fields: [subCategoryId], references: [id])
+  cityId         Int?     @map("city_id")
+  city           MasterCity? @relation(fields: [cityId], references: [id])
+  areaId         Int?     @map("area_id")
+  area           MasterArea? @relation(fields: [areaId], references: [id])
+  landmark       String?  @map("landmark")
+  currentPlanId  Int?     @map("current_plan_id")
+  plan           MasterSubscriptionPlan? @relation(fields: [currentPlanId], references: [id])
+  isVerified     Boolean  @default(false) @map("is_verified")
+  verifiedById   Int?     @map("verified_by")
+  verifiedBy     User?    @relation("VerifiedBy", fields: [verifiedById], references: [id])
+  avgRating      Decimal  @default(0.0) @db.Decimal(3, 2) @map("avg_rating")
+  reviewCount    Int      @default(0) @map("review_count")
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  gallery       VendorGallery[]
+  socialLinks   VendorSocialLink[]
+  openingHours  VendorOpeningHours[]
+  amenities     VendorAmenityMapping[]
+  occasions     VendorOccasionMapping[]
+  inquiries     Inquiry[]
+  reviews       VendorReview[]
+  payments      VendorPayment[]
+
+  @@index([cityId, categoryId])
+  @@map("vendor_profiles")
+}
+
+model VendorGallery {
+  id           Int           @id @default(autoincrement())
+  vendorId     Int           @map("vendor_id")
+  vendor       VendorProfile @relation(fields: [vendorId], references: [id])
+  mediaType    String?       @map("media_type")
+  mediaUrl     String?       @map("media_url")
+  isCoverImage Boolean       @default(false) @map("is_cover_image")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  @@map("vendor_gallery")
+}
+
+model VendorSocialLink {
+  id           Int           @id @default(autoincrement())
+  vendorId     Int           @map("vendor_id")
+  vendor       VendorProfile @relation(fields: [vendorId], references: [id])
+  platformName String?       @map("platform_name")
+  url          String
+
+  @@map("vendor_social_links")
+}
+
+model VendorOpeningHours {
+  id        Int           @id @default(autoincrement())
+  vendorId  Int           @map("vendor_id")
+  vendor    VendorProfile @relation(fields: [vendorId], references: [id])
+  dayOfWeek Int           @map("day_of_week")
+  openTime  DateTime?     @db.Time @map("open_time")
+  closeTime DateTime?     @db.Time @map("close_time")
+  isClosed  Boolean       @default(false) @map("is_closed")
+
+  @@unique([vendorId, dayOfWeek])
+  @@map("vendor_opening_hours")
+}
+
+// --- MAPPINGS ---
+model VendorAmenityMapping {
+  id        Int           @id @default(autoincrement())
+  vendorId  Int           @map("vendor_id")
+  vendor    VendorProfile @relation(fields: [vendorId], references: [id])
+  amenityId Int           @map("amenity_id")
+  amenity   MasterAmenity @relation(fields: [amenityId], references: [id])
+
+  @@unique([vendorId, amenityId])
+  @@map("vendor_amenities_mapping")
+}
+
+model VendorOccasionMapping {
+  id         Int            @id @default(autoincrement())
+  vendorId   Int            @map("vendor_id")
+  vendor     VendorProfile  @relation(fields: [vendorId], references: [id])
+  occasionId Int            @map("occasion_id")
+  occasion   MasterOccasion @relation(fields: [occasionId], references: [id])
+
+  @@unique([vendorId, occasionId])
+  @@map("vendor_occasions_mapping")
+}
+
+// --- TRANSACTIONS ---
+model MasterSubscriptionPlan {
+  id             Int             @id @default(autoincrement())
+  planName       String?         @map("plan_name")
+  price          Decimal         @db.Decimal(10, 2)
+  durationMonths Int             @map("duration_months")
+  imageLimit     Int             @map("image_limit")
+  isFeatured     Boolean         @default(false) @map("is_featured")
+  vendors        VendorProfile[]
+  payments       VendorPayment[]
+
+  @@map("master_subscription_plans")
+}
+
+model Inquiry {
+  id         Int            @id @default(autoincrement())
+  userId     Int?           @map("user_id")
+  user       User?          @relation(fields: [userId], references: [id])
+  vendorId   Int            @map("vendor_id")
+  vendor     VendorProfile  @relation(fields: [vendorId], references: [id])
+  occasionId Int?           @map("occasion_id")
+  occasion   MasterOccasion? @relation(fields: [occasionId], references: [id])
+  eventDate  DateTime?      @db.Date @map("event_date")
+  message    String?
+  status     String         @default("PENDING")
+  isDeleted  Boolean        @default(false) @map("is_deleted")
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  @@index([vendorId])
+  @@map("inquiries")
+}
+
+model VendorReview {
+  id           Int           @id @default(autoincrement())
+  vendorId     Int           @map("vendor_id")
+  vendor       VendorProfile @relation(fields: [vendorId], references: [id])
+  userId       Int           @map("user_id")
+  user         User          @relation("UserReviews", fields: [userId], references: [id])
+  rating       Int
+  reviewText   String?       @map("review_text")
+  isPublished  Boolean       @default(false) @map("is_published")
+  moderatedBy  Int?          @map("moderated_by")
+  moderator    User?         @relation("ModeratedReviews", fields: [moderatedBy], references: [id])
+  isDeleted    Boolean       @default(false) @map("is_deleted")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  @@unique([vendorId, userId])
+  @@map("vendor_reviews")
+}
+
+model VendorPayment {
+  id            Int                    @id @default(autoincrement())
+  vendorId      Int                    @map("vendor_id")
+  vendor        VendorProfile          @relation(fields: [vendorId], references: [id])
+  planId        Int                    @map("plan_id")
+  plan          MasterSubscriptionPlan @relation(fields: [planId], references: [id])
+  transactionId String                 @unique @map("transaction_id")
+  amount        Decimal                @db.Decimal(10, 2)
+  currency      String                 @default("INR") @db.VarChar(5)
+  paymentStatus String?                @map("payment_status")
+  paymentDate   DateTime?              @map("payment_date")
+  invoiceUrl    String?                @map("invoice_url")
+
+  @@map("vendor_payments")
+}
+
+model SystemLog {
+  id              Int      @id @default(autoincrement())
+  actionPerformed String   @map("action_performed")
+  performedBy     Int?     @map("performed_by")
+  performer       User?    @relation(fields: [performedBy], references: [id])
+  targetId        Int?     @map("target_id")
+  remarks         String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("system_logs")
+}
